@@ -1,6 +1,5 @@
 import express from "express";
-import StudentRoute from "./routes/student.route.js"; // Adjust the import path as necessary
-
+import StudentRoute from "./routes/student.route.js";
 const app = express();
 
 app.use(express.json());
