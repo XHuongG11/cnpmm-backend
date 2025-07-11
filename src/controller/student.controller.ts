@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import { Request, Response } from "express";
-import { Student } from "../models/student.model.js";
+import Student from "../models/student.model.js";
 import { errorResponse, successResponse } from "../utils/responseHelper.js";
 
 const getAreasByDate = async (req: Request, res: Response) => {

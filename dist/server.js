@@ -5,10 +5,15 @@ import express from "express";
 import { Router } from "express";
 
 // src/models/student.model.ts
-import mongoose5 from "mongoose";
+import mongoose, { Schema } from "mongoose";
 
-// src/models/examStatus.model.ts
-import mongoose from "mongoose";
+// src/enums/EGender.ts
+var EGender = /* @__PURE__ */ ((EGender2) => {
+  EGender2["MALE"] = "Male";
+  EGender2["FEMALE"] = "Female";
+  return EGender2;
+})(EGender || {});
+var EGender_default = EGender;
 
 // src/enums/EExamEligibility.ts
 var EExamEligibility = /* @__PURE__ */ ((EExamEligibility2) => {
@@ -19,134 +24,47 @@ var EExamEligibility = /* @__PURE__ */ ((EExamEligibility2) => {
 })(EExamEligibility || {});
 var EExamEligibility_default = EExamEligibility;
 
-// src/models/examStatus.model.ts
-var ExamStatus = new mongoose.Schema(
-  {
+// src/models/base.model.ts
+function basePlugin(schema) {
+  schema.add({ isDeleted: { type: Boolean, default: false } });
+  schema.set("timestamps", true);
+}
+
+// src/models/student.model.ts
+var StudentSchema = new mongoose.Schema({
+  studentId: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  currentInfo: {
+    fullName: String,
+    identityCard: String,
+    dob: Date,
+    gender: {
+      type: String,
+      enum: EGender_default
+    },
+    email: String,
+    phone: String,
+    studentClass: String,
+    origin: String,
+    major: String,
+    facility: String,
+    imageUrl: String
+  },
+  infoHistory: [{ type: Schema.Types.ObjectId, ref: "InfoHistory" }],
+  examParticipations: [{ type: Schema.Types.ObjectId, ref: "ExamSession" }],
+  status: {
     examEligibility: {
       type: String,
       enum: EExamEligibility_default
     },
     // active, suspended, expelled
     reason: String
-  },
-  { _id: false }
-);
-var examStatus_model_default = ExamStatus;
-
-// src/models/examParticipation.model.ts
-import mongoose4 from "mongoose";
-
-// src/models/violationReport.model.ts
-import mongoose3 from "mongoose";
-
-// src/models/inviligator.model.ts
-import mongoose2 from "mongoose";
-var Invigilator = new mongoose2.Schema(
-  {
-    staffId: {
-      type: String,
-      required: true
-    },
-    name: {
-      type: String,
-      required: true
-    }
-  },
-  { _id: false }
-);
-var inviligator_model_default = Invigilator;
-
-// src/enums/ELevelViolation.ts
-var ELevelViolation = /* @__PURE__ */ ((ELevelViolation2) => {
-  ELevelViolation2["KHIEN_TRACH"] = "Khi\u1EC3n tr\xE1ch";
-  ELevelViolation2["CANH_CAO"] = "C\u1EA3nh c\xE1o";
-  ELevelViolation2["DING_CHI"] = "\u0110\xECnh ch\u1EC9";
-  ELevelViolation2["DUOI_HOC"] = "\u0110u\u1ED5i h\u1ECDc";
-  return ELevelViolation2;
-})(ELevelViolation || {});
-var ELevelViolation_default = ELevelViolation;
-
-// src/models/violationReport.model.ts
-var ViolationReport = new mongoose3.Schema(
-  {
-    hasViolation: Boolean,
-    level: {
-      type: String,
-      enum: Object.values(ELevelViolation_default)
-    },
-    description: String,
-    invigilators: [inviligator_model_default],
-    notes: String
-  },
-  { _id: false }
-);
-var violationReport_model_default = ViolationReport;
-
-// src/models/examParticipation.model.ts
-var ExamParticipation = new mongoose4.Schema(
-  {
-    examDate: Date,
-    area: String,
-    room: String,
-    shift: String,
-    violation: violationReport_model_default
-  },
-  { _id: false }
-);
-var examParticipation_model_default = ExamParticipation;
-
-// src/enums/EGender.ts
-var EGender = /* @__PURE__ */ ((EGender2) => {
-  EGender2["MALE"] = "Male";
-  EGender2["FEMALE"] = "Female";
-  return EGender2;
-})(EGender || {});
-var EGender_default = EGender;
-
-// src/models/student.model.ts
-var StudentInfo = new mongoose5.Schema(
-  {
-    fullName: String,
-    dob: Date,
-    gender: {
-      type: String,
-      enum: EGender_default
-    },
-    studentClass: String,
-    email: String,
-    phone: String
-  },
-  { _id: false }
-);
-var StudentInfoHistory = new mongoose5.Schema(
-  {
-    ...StudentInfo.obj,
-    updatedAt: Date
-  },
-  { _id: false }
-);
-var StudentSchema = new mongoose5.Schema(
-  {
-    studentId: {
-      type: String,
-      required: true,
-      unique: true
-    },
-    currentInfo: StudentInfo,
-    infoHistory: [StudentInfoHistory],
-    examParticipations: [examParticipation_model_default],
-    status: examStatus_model_default,
-    createdAt: {
-      type: Date,
-      default: Date.now
-    },
-    updatedAt: {
-      type: Date,
-      default: Date.now
-    }
-  },
-  { collection: "students" }
-);
+  }
+});
+StudentSchema.plugin(basePlugin);
 StudentSchema.set("toJSON", {
   transform: function(doc, ret) {
     if (ret.currentInfo.dob) {
@@ -155,7 +73,8 @@ StudentSchema.set("toJSON", {
     return ret;
   }
 });
-var Student = mongoose5.model("Student", StudentSchema);
+var Student = mongoose.model("Student", StudentSchema);
+var student_model_default = Student;
 
 // src/utils/responseHelper.ts
 function successResponse(res, data) {
@@ -179,7 +98,7 @@ var getAreasByDate = async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return errorResponse(res, 400, "Invalid date format. Use YYYY-MM-DD.");
     }
-    const data = await Student.aggregate([
+    const data = await student_model_default.aggregate([
       { $unwind: "$examParticipations" },
       {
         $match: {
@@ -210,7 +129,7 @@ var getShiftsByDateAndArea = async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return errorResponse(res, 400, "Invalid date format. Use YYYY-MM-DD.");
     }
-    const data = await Student.aggregate([
+    const data = await student_model_default.aggregate([
       { $unwind: "$examParticipations" },
       {
         $match: {
@@ -242,7 +161,7 @@ var getRoomsByDateAreaAndShift = async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return errorResponse(res, 400, "Invalid date format. Use YYYY-MM-DD.");
     }
-    const data = await Student.aggregate([
+    const data = await student_model_default.aggregate([
       { $unwind: "$examParticipations" },
       {
         $match: {
@@ -275,7 +194,7 @@ var getStudentsByDateAreaShiftAndRoom = async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return errorResponse(res, 400, "Invalid date format. Use YYYY-MM-DD.");
     }
-    const data = await Student.aggregate([
+    const data = await student_model_default.aggregate([
       { $unwind: "$examParticipations" },
       {
         $match: {
@@ -332,10 +251,10 @@ var app_default = app;
 import dotenv from "dotenv";
 
 // src/config/db.ts
-import mongoose6 from "mongoose";
+import mongoose2 from "mongoose";
 var connectToDatabase = async () => {
   try {
-    await mongoose6.connect(process.env.URL + "/" + process.env.DATABASE_NAME);
+    await mongoose2.connect(process.env.URL + "/" + process.env.DATABASE_NAME);
     console.log("Connected to the database successfully");
   } catch (error) {
     console.error("Error connecting to the database:", error);

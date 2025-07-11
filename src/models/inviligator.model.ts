@@ -1,17 +1,26 @@
-import mongoose from "mongoose";
+import mongoose, { Schema } from "mongoose";
+import basePlugin from "./base.model";
 
-const Invigilator = new mongoose.Schema(
-  {
-    staffId: {
-      type: String,
-      required: true,
-    },
-    name: {
-      type: String,
-      required: true,
-    },
+const InvigilatorSchema = new mongoose.Schema({
+  _id: Schema.Types.ObjectId,
+  staffId: {
+    type: String,
+    required: true,
   },
-  { _id: false }
-);
+  name: {
+    type: String,
+    required: true,
+  },
+  email: {
+    type: String,
+  },
+  phone: {
+    type: String,
+  },
+});
+
+InvigilatorSchema.plugin(basePlugin);
+
+const Invigilator = mongoose.model("Invigilator", InvigilatorSchema);
 
 export default Invigilator;

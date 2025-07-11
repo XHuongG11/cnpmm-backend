@@ -1,53 +1,42 @@
-import mongoose from "mongoose";
-import ExamStatus from "./examStatus.model.js";
-import ExamParticipation from "./examParticipation.model.js";
+import mongoose, { Schema } from "mongoose";
 import EGender from "../enums/EGender.js";
+import EExamEligibility from "../enums/EExamEligibility.js";
+import basePlugin from "./base.model.js";
 
-const StudentInfo = new mongoose.Schema(
-  {
+const StudentSchema = new mongoose.Schema({
+  studentId: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+  currentInfo: {
     fullName: String,
+    identityCard: String,
     dob: Date,
     gender: {
       type: String,
       enum: EGender,
     },
-    studentClass: String,
     email: String,
     phone: String,
+    studentClass: String,
+    origin: String,
+    major: String,
+    facility: String,
+    imageUrl: String,
   },
-  { _id: false }
-);
-
-const StudentInfoHistory = new mongoose.Schema(
-  {
-    ...StudentInfo.obj,
-    updatedAt: Date,
-  },
-  { _id: false }
-);
-
-const StudentSchema = new mongoose.Schema(
-  {
-    studentId: {
+  infoHistory: [{ type: Schema.Types.ObjectId, ref: "InfoHistory" }],
+  examParticipations: [{ type: Schema.Types.ObjectId, ref: "ExamSession" }],
+  status: {
+    examEligibility: {
       type: String,
-      required: true,
-      unique: true,
-    },
-    currentInfo: StudentInfo,
-    infoHistory: [StudentInfoHistory],
-    examParticipations: [ExamParticipation],
-    status: ExamStatus,
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
-    updatedAt: {
-      type: Date,
-      default: Date.now,
-    },
+      enum: EExamEligibility,
+    }, // active, suspended, expelled
+    reason: String,
   },
-  { collection: "students" }
-);
+});
+
+StudentSchema.plugin(basePlugin);
 
 // format return JSON
 StudentSchema.set("toJSON", {
@@ -63,4 +52,4 @@ StudentSchema.set("toJSON", {
 
 const Student = mongoose.model("Student", StudentSchema);
 
-export { Student, StudentInfo, StudentInfoHistory };
+export default Student;
