@@ -30,12 +30,7 @@ const getAreasByDate = async (req: Request, res: Response) => {
 
     return successResponse(res, data);
   } catch (error) {
-    return errorResponse(
-      res,
-      500,
-      "Error fetching students by date",
-      error instanceof Error ? error.message : String(error)
-    );
+    return errorResponse(res, 500, "Error fetching students by date");
   }
 };
 
@@ -67,12 +62,7 @@ const getShiftsByDateAndArea = async (req: Request, res: Response) => {
 
     return successResponse(res, data);
   } catch (error) {
-    return errorResponse(
-      res,
-      500,
-      "Error fetching shifts by date and area",
-      error instanceof Error ? error.message : String(error)
-    );
+    return errorResponse(res, 500, "Error fetching shifts by date and area");
   }
 };
 
@@ -108,8 +98,7 @@ const getRoomsByDateAreaAndShift = async (req: Request, res: Response) => {
     return errorResponse(
       res,
       500,
-      "Error fetching rooms by date, area and shift",
-      error instanceof Error ? error.message : String(error)
+      "Error fetching rooms by date, area and shift"
     );
   }
 };
@@ -144,9 +133,36 @@ const getStudentsByDateAreaShiftAndRoom = async (
     return errorResponse(
       res,
       500,
-      "Error fetching students by date, area, shift and room",
-      error instanceof Error ? error.message : String(error)
+      "Error fetching students by date, area, shift and room"
     );
+  }
+};
+
+const searchByFullName = async (req: Request, res: Response) => {
+  try {
+    const fullName = req.query.fullName === undefined ? "" : req.query.fullName;
+    const result = await Student.find(
+      {
+        "currentInfo.fullName": { $regex: fullName, $options: "i" },
+      },
+      { currentInfo: 1, studentId: 1, _id: 0 }
+    );
+    return successResponse(res, result);
+  } catch (error) {
+    return errorResponse(res, 500, "Error search by name");
+  }
+};
+const searchByStudentID = async (req: Request, res: Response) => {
+  try {
+    const studentId =
+      req.params.studentId === undefined ? "" : req.params.studentId;
+    const result = await Student.findOne(
+      { studentId: studentId },
+      { currentInfo: 1, studentId: 1, _id: 0 }
+    );
+    return successResponse(res, result);
+  } catch (error) {
+    return errorResponse(res, 500, "Error search by name");
   }
 };
 export const StudentController = {
@@ -154,4 +170,6 @@ export const StudentController = {
   getShiftsByDateAndArea,
   getRoomsByDateAreaAndShift,
   getStudentsByDateAreaShiftAndRoom,
+  searchByFullName,
+  searchByStudentID,
 };

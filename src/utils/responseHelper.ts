@@ -12,12 +12,10 @@ export function successResponse<T>(res: Response, data: T) {
 export function errorResponse(
   res: Response,
   statusCode = 400,
-  message: String,
-  errors?: any
+  message: String
 ) {
   res.status(statusCode).json({
     status: "error",
     message,
-    errors,
   });
 }

@@ -17,4 +17,7 @@ router.get(
   StudentController.getStudentsByDateAreaShiftAndRoom
 );
 
+router.get("/search/", StudentController.searchByFullName);
+router.get("/:studentId", StudentController.searchByStudentID);
+
 export default router;

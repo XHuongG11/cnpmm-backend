@@ -83,11 +83,10 @@ function successResponse(res, data) {
     data
   });
 }
-function errorResponse(res, statusCode = 400, message, errors) {
+function errorResponse(res, statusCode = 400, message) {
   res.status(statusCode).json({
     status: "error",
-    message,
-    errors
+    message
   });
 }
 
@@ -115,12 +114,7 @@ var getAreasByDate = async (req, res) => {
     ]).exec();
     return successResponse(res, data);
   } catch (error) {
-    return errorResponse(
-      res,
-      500,
-      "Error fetching students by date",
-      error instanceof Error ? error.message : String(error)
-    );
+    return errorResponse(res, 500, "Error fetching students by date");
   }
 };
 var getShiftsByDateAndArea = async (req, res) => {
@@ -147,12 +141,7 @@ var getShiftsByDateAndArea = async (req, res) => {
     ]).exec();
     return successResponse(res, data);
   } catch (error) {
-    return errorResponse(
-      res,
-      500,
-      "Error fetching shifts by date and area",
-      error instanceof Error ? error.message : String(error)
-    );
+    return errorResponse(res, 500, "Error fetching shifts by date and area");
   }
 };
 var getRoomsByDateAreaAndShift = async (req, res) => {
@@ -183,8 +172,7 @@ var getRoomsByDateAreaAndShift = async (req, res) => {
     return errorResponse(
       res,
       500,
-      "Error fetching rooms by date, area and shift",
-      error instanceof Error ? error.message : String(error)
+      "Error fetching rooms by date, area and shift"
     );
   }
 };
@@ -211,16 +199,46 @@ var getStudentsByDateAreaShiftAndRoom = async (req, res) => {
     return errorResponse(
       res,
       500,
-      "Error fetching students by date, area, shift and room",
-      error instanceof Error ? error.message : String(error)
+      "Error fetching students by date, area, shift and room"
     );
+  }
+};
+var searchByFullName = async (req, res) => {
+  try {
+    const fullName = req.query.fullName === void 0 ? "" : req.query.fullName;
+    console.log(fullName);
+    const result = await student_model_default.find(
+      {
+        "currentInfo.fullName": { $regex: fullName, $options: "i" }
+      },
+      { currentInfo: 1, studentId: 1, _id: 0 }
+    );
+    console.log(result);
+    return successResponse(res, result);
+  } catch (error) {
+    return errorResponse(res, 500, "Error search by name");
+  }
+};
+var searchByStudentID = async (req, res) => {
+  try {
+    const studentId = req.params.studentId === void 0 ? "" : req.params.studentId;
+    console.log(studentId);
+    const result = await student_model_default.findOne(
+      { studentId },
+      { currentInfo: 1, studentId: 1, _id: 0 }
+    );
+    return successResponse(res, result);
+  } catch (error) {
+    return errorResponse(res, 500, "Error search by name");
   }
 };
 var StudentController = {
   getAreasByDate,
   getShiftsByDateAndArea,
   getRoomsByDateAreaAndShift,
-  getStudentsByDateAreaShiftAndRoom
+  getStudentsByDateAreaShiftAndRoom,
+  searchByFullName,
+  searchByStudentID
 };
 
 // src/routes/student.route.ts
@@ -238,12 +256,20 @@ router.get(
   "/search/:date/:area/:shift/:room/students",
   StudentController.getStudentsByDateAreaShiftAndRoom
 );
+router.get("/search/", StudentController.searchByFullName);
+router.get("/:studentId", StudentController.searchByStudentID);
 var student_route_default = router;
 
 // src/app.ts
+import cors from "cors";
 var app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+var corsOption = {
+  origin: "http://localhost:5173",
+  allowedHeaders: ["Content-Type", "applicaton/json"]
+};
+app.use(cors(corsOption));
 app.use("/api/students", student_route_default);
 var app_default = app;
 
