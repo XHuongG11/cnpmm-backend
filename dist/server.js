@@ -90,6 +90,22 @@ function errorResponse(res, statusCode = 400, message) {
   });
 }
 
+// src/models/examSession.model.ts
+import mongoose2, { Schema as Schema2 } from "mongoose";
+var ExamSessionSchema = new mongoose2.Schema({
+  _id: Schema2.Types.ObjectId,
+  examName: String,
+  examDate: Date,
+  area: String,
+  room: String,
+  shift: String,
+  roomInvigilators: [{ type: Schema2.Types.ObjectId, ref: "Invigilator" }],
+  violation: { type: Schema2.Types.ObjectId, ref: "Violation" }
+});
+ExamSessionSchema.plugin(basePlugin);
+var ExamSession = mongoose2.model("ExamSession", ExamSessionSchema);
+var examSession_model_default = ExamSession;
+
 // src/controller/student.controller.ts
 var getAreasByDate = async (req, res) => {
   const date = req.params.date;
@@ -97,22 +113,27 @@ var getAreasByDate = async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return errorResponse(res, 400, "Invalid date format. Use YYYY-MM-DD.");
     }
-    const data = await student_model_default.aggregate([
-      { $unwind: "$examParticipations" },
+    const start = /* @__PURE__ */ new Date(`${date}T00:00:00.000Z`);
+    const end = new Date(new Date(start).setDate(start.getDate() + 1));
+    const data = await examSession_model_default.aggregate([
       {
         $match: {
-          "examParticipations.examDate": { $regex: `^${date}` }
+          examDate: {
+            $gte: start,
+            $lt: end
+          }
         }
       },
       {
         $group: {
-          _id: "$examParticipations.area"
+          _id: "$area"
         }
       },
       { $project: { _id: 0, area: "$_id" } },
       { $sort: { area: 1 } }
     ]).exec();
-    return successResponse(res, data);
+    const areaList = data.map((item) => item.area);
+    return successResponse(res, areaList);
   } catch (error) {
     return errorResponse(res, 500, "Error fetching students by date");
   }
@@ -123,20 +144,25 @@ var getShiftsByDateAndArea = async (req, res) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return errorResponse(res, 400, "Invalid date format. Use YYYY-MM-DD.");
     }
-    const data = await student_model_default.aggregate([
-      { $unwind: "$examParticipations" },
+    const start = /* @__PURE__ */ new Date(`${date}T00:00:00.000Z`);
+    const end = new Date(new Date(start).setDate(start.getDate() + 1));
+    const data = await examSession_model_default.aggregate([
       {
         $match: {
-          "examParticipations.examDate": { $regex: `^${date}` },
-          "examParticipations.area": area
+          examDate: {
+            $gte: start,
+            $lt: end
+          },
+          area
         }
       },
       {
         $group: {
-          _id: "$examParticipations.shift"
+          _id: "$shift",
+          rooms: { $addToSet: "$room" }
         }
       },
-      { $project: { _id: 0, shift: "$_id" } },
+      { $project: { _id: 0, shift: "$_id", rooms: 1 } },
       { $sort: { shift: 1 } }
     ]).exec();
     return successResponse(res, data);
@@ -144,55 +170,62 @@ var getShiftsByDateAndArea = async (req, res) => {
     return errorResponse(res, 500, "Error fetching shifts by date and area");
   }
 };
-var getRoomsByDateAreaAndShift = async (req, res) => {
-  try {
-    const { date, area, shift } = req.params;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return errorResponse(res, 400, "Invalid date format. Use YYYY-MM-DD.");
-    }
-    const data = await student_model_default.aggregate([
-      { $unwind: "$examParticipations" },
-      {
-        $match: {
-          "examParticipations.examDate": { $regex: `^${date}` },
-          "examParticipations.area": area,
-          "examParticipations.shift": shift
-        }
-      },
-      {
-        $group: {
-          _id: "$examParticipations.room"
-        }
-      },
-      { $project: { _id: 0, room: "$_id" } },
-      { $sort: { room: 1 } }
-    ]).exec();
-    return successResponse(res, data);
-  } catch (error) {
-    return errorResponse(
-      res,
-      500,
-      "Error fetching rooms by date, area and shift"
-    );
-  }
-};
-var getStudentsByDateAreaShiftAndRoom = async (req, res) => {
+var getStudentsInRoom = async (req, res) => {
   try {
     const { date, area, shift, room } = req.params;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return errorResponse(res, 400, "Invalid date format. Use YYYY-MM-DD.");
     }
-    const data = await student_model_default.aggregate([
-      { $unwind: "$examParticipations" },
+    const start = /* @__PURE__ */ new Date(`${date}T00:00:00.000Z`);
+    const end = new Date(new Date(start).setDate(start.getDate() + 1));
+    const [data] = await student_model_default.aggregate([
+      // Nối dữ liệu từ bảng ExamSession
       {
-        $match: {
-          "examParticipations.examDate": { $regex: `^${date}` },
-          "examParticipations.area": area,
-          "examParticipations.shift": shift,
-          "examParticipations.room": room
+        $lookup: {
+          from: "examsessions",
+          localField: "examParticipations",
+          foreignField: "_id",
+          as: "examParticipationsData"
         }
       },
-      { $project: { _id: 0, mssv: "$studentId", currentInfo: "$currentInfo" } }
+      { $unwind: "$examParticipationsData" },
+      {
+        $match: {
+          "examParticipationsData.examDate": { $gte: start, $lt: end },
+          "examParticipationsData.area": area,
+          "examParticipationsData.shift": shift,
+          "examParticipationsData.room": room
+        }
+      },
+      {
+        $facet: {
+          students: [
+            {
+              $project: {
+                _id: 0,
+                mssv: "$studentId",
+                currentInfo: "$currentInfo"
+              }
+            }
+          ],
+          subjectName: [
+            {
+              $group: {
+                _id: null,
+                examName: { $first: "$examParticipationsData.examName" }
+              }
+            }
+          ],
+          total: [{ $count: "totalStudent" }]
+        }
+      },
+      {
+        $project: {
+          students: 1,
+          subjectName: { $arrayElemAt: ["$subjectName.examName", 0] },
+          total: { $arrayElemAt: ["$total.totalStudent", 0] }
+        }
+      }
     ]).exec();
     return successResponse(res, data);
   } catch (error) {
@@ -206,14 +239,12 @@ var getStudentsByDateAreaShiftAndRoom = async (req, res) => {
 var searchByFullName = async (req, res) => {
   try {
     const fullName = req.query.fullName === void 0 ? "" : req.query.fullName;
-    console.log(fullName);
     const result = await student_model_default.find(
       {
         "currentInfo.fullName": { $regex: fullName, $options: "i" }
       },
       { currentInfo: 1, studentId: 1, _id: 0 }
     );
-    console.log(result);
     return successResponse(res, result);
   } catch (error) {
     return errorResponse(res, 500, "Error search by name");
@@ -222,7 +253,6 @@ var searchByFullName = async (req, res) => {
 var searchByStudentID = async (req, res) => {
   try {
     const studentId = req.params.studentId === void 0 ? "" : req.params.studentId;
-    console.log(studentId);
     const result = await student_model_default.findOne(
       { studentId },
       { currentInfo: 1, studentId: 1, _id: 0 }
@@ -235,8 +265,7 @@ var searchByStudentID = async (req, res) => {
 var StudentController = {
   getAreasByDate,
   getShiftsByDateAndArea,
-  getRoomsByDateAreaAndShift,
-  getStudentsByDateAreaShiftAndRoom,
+  getStudentsInRoom,
   searchByFullName,
   searchByStudentID
 };
@@ -249,38 +278,107 @@ router.get(
   StudentController.getShiftsByDateAndArea
 );
 router.get(
-  "/search/:date/:area/:shift/rooms",
-  StudentController.getRoomsByDateAreaAndShift
-);
-router.get(
   "/search/:date/:area/:shift/:room/students",
-  StudentController.getStudentsByDateAreaShiftAndRoom
+  StudentController.getStudentsInRoom
 );
 router.get("/search/", StudentController.searchByFullName);
 router.get("/:studentId", StudentController.searchByStudentID);
 var student_route_default = router;
 
+// src/routes/auth.route.ts
+import { Router as Router2 } from "express";
+
+// src/controller/auth.controller.ts
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+
+// src/models/admin.model.ts
+import mongoose3 from "mongoose";
+var AdminSchema = new mongoose3.Schema({
+  username: String,
+  password: String
+});
+AdminSchema.plugin(basePlugin);
+var Admin = mongoose3.model("Admin", AdminSchema);
+var admin_model_default = Admin;
+
+// src/controller/auth.controller.ts
+var login = async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const admin = await admin_model_default.findOne({ username });
+    if (!admin) return errorResponse(res, 401, "Sai th\xF4ng tin \u0111\u0103ng nh\u1EADp");
+    const hashedPassword = admin.get("password");
+    if (!hashedPassword || typeof hashedPassword !== "string") {
+      return errorResponse(res, 500, "Kh\xF4ng t\xECm th\u1EA5y m\u1EADt kh\u1EA9u \u0111\xE3 m\xE3 h\xF3a");
+    }
+    const isMatch = await bcrypt.compare(password, hashedPassword);
+    if (!isMatch) return errorResponse(res, 401, "Sai th\xF4ng tin \u0111\u0103ng nh\u1EADp");
+    const JWT_SECRET = process.env.JWT_SECRET;
+    if (!JWT_SECRET) {
+      return errorResponse(res, 500, "JWT secret not defined");
+    }
+    const token = jwt.sign(
+      { id: admin.get("_id"), username: admin.get("username") },
+      JWT_SECRET,
+      { expiresIn: "4h" }
+    );
+    return successResponse(res, token);
+  } catch (err) {
+    console.error(err);
+    return errorResponse(res, 500, "L\u1ED7i \u0111\u0103ng nh\u1EADp");
+  }
+};
+var AuthController = {
+  login
+};
+
+// src/routes/auth.route.ts
+var router2 = Router2();
+router2.post("/login", AuthController.login);
+var auth_route_default = router2;
+
 // src/app.ts
 import cors from "cors";
-var app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-var corsOption = {
-  origin: "http://localhost:5173",
-  allowedHeaders: ["Content-Type", "applicaton/json"]
+
+// src/middleware/authenticateToken.ts
+import jwt2 from "jsonwebtoken";
+var authenticateToken = async (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader?.split(" ")[1];
+  if (!token) return errorResponse(res, 401, "Please login and try again.");
+  try {
+    const JWT_SECRET = process.env.JWT_SECRET;
+    jwt2.verify(token, JWT_SECRET);
+    next();
+  } catch (err) {
+    return errorResponse(res, 403, "You don't permission.");
+  }
 };
-app.use(cors(corsOption));
-app.use("/api/students", student_route_default);
+
+// src/app.ts
+var app = express();
+app.use(express.urlencoded({ extended: true }));
+var corsOptions = {
+  origin: "http://localhost:5173",
+  credentials: true,
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+};
+app.use(cors(corsOptions));
+app.use(express.json());
+app.use("/api/auth", auth_route_default);
+app.use("/api/students", authenticateToken, student_route_default);
 var app_default = app;
 
 // src/server.ts
 import dotenv from "dotenv";
 
 // src/config/db.ts
-import mongoose2 from "mongoose";
+import mongoose4 from "mongoose";
 var connectToDatabase = async () => {
   try {
-    await mongoose2.connect(process.env.URL + "/" + process.env.DATABASE_NAME);
+    await mongoose4.connect(process.env.URL + "/" + process.env.DATABASE_NAME);
     console.log("Connected to the database successfully");
   } catch (error) {
     console.error("Error connecting to the database:", error);
@@ -288,6 +386,8 @@ var connectToDatabase = async () => {
 };
 
 // src/server.ts
+import bcrypt2 from "bcryptjs";
+import mongoose5 from "mongoose";
 dotenv.config();
 var startServer = async () => {
   try {

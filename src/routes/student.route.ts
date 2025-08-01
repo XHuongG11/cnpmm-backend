@@ -9,12 +9,8 @@ router.get(
   StudentController.getShiftsByDateAndArea
 );
 router.get(
-  "/search/:date/:area/:shift/rooms",
-  StudentController.getRoomsByDateAreaAndShift
-);
-router.get(
   "/search/:date/:area/:shift/:room/students",
-  StudentController.getStudentsByDateAreaShiftAndRoom
+  StudentController.getStudentsInRoom
 );
 
 router.get("/search/", StudentController.searchByFullName);
